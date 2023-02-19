@@ -9,6 +9,8 @@
 ######################################################
 
 import gc
+# 禁用gc，为了提高性能。目前还没有看出来在哪里提高了性能.
+# 且禁用gc之后，需要手动管理内存
 gc.disable()
 
 import argparse
@@ -41,12 +43,14 @@ from pyquery import PyQuery as pq
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from requests.exceptions import SSLError
 
+# 命令色彩参数
 from colorama import init
 init()
 
 from howdoi import __version__
 from howdoi.errors import GoogleValidationError, BingValidationError, DDGValidationError
 
+# 日志和环境变量的设置
 logging.basicConfig(format='%(levelname)s: %(message)s')
 if os.getenv('HOWDOI_DISABLE_SSL'):  # Set http instead of https
     SCHEME = 'http://'
@@ -55,6 +59,7 @@ else:
     SCHEME = 'https://'
     VERIFY_SSL_CERTIFICATE = True
 
+# 支持的搜索引擎选项
 SUPPORTED_SEARCH_ENGINES = ('google', 'bing', 'duckduckgo')
 
 URL = os.getenv('HOWDOI_URL') or 'stackoverflow.com'
@@ -82,6 +87,7 @@ BLOCKED_QUESTION_FRAGMENTS = (
     'webcache.googleusercontent.com',
 )
 
+# start 的unicode 编码
 STAR_HEADER = '\u2605'
 ANSWER_HEADER = '{2}  Answer from {0} {2}\n{1}'
 NO_ANSWER_MSG = '< no answer given >'
@@ -91,12 +97,14 @@ CACHE_DIR = appdirs.user_cache_dir('howdoi')
 CACHE_ENTRY_MAX = 128
 
 HTML_CACHE_PATH = 'page_cache'
+# 支持的帮助命令
 SUPPORTED_HELP_QUERIES = ['use howdoi', 'howdoi', 'run howdoi', 'setup howdoi',
                           'do howdoi', 'howdoi howdoi', 'howdoi use howdoi']
 
 NO_RESULTS_MESSAGE = "Sorry, couldn't find any help with that topic"
 
 # variables for text formatting, prepend to string to begin text formatting.
+# 文本格式化工具
 BOLD = '\033[1m'
 GREEN = '\033[92m'
 RED = '\033[91m'
@@ -130,15 +138,21 @@ class IntRange:
         self.imax = imax
 
     def __call__(self, arg):
+        """
+        初始化这个类之前，会执行__call__ 方法，将一些不合法的参数给拦截下来。
+        同时抛出错误原因
+        """
         try:
             value = int(arg)
         except ValueError as value_error:
+            # 这个用法可以学习一下
             raise self.exception() from value_error
         if (self.imin is not None and value < self.imin) or (self.imax is not None and value > self.imax):
             raise self.exception()
         return value
 
     def exception(self):
+        # 这个方法为什么不改成私有方法
         if self.imin is not None and self.imax is not None:
             return argparse.ArgumentTypeError(f'Must be an integer in the range [{self.imin}, {self.imax}]')
         if self.imin is not None:
@@ -149,20 +163,30 @@ class IntRange:
 
 
 def _random_int(width):
+    """
+    接受一个固定宽度，返回一个随机的整数
+    """
+    # bres 是一个bytes 类型的随机字符串
     bres = os.urandom(width)
     if sys.version < '3':
+        # 如果是2.x的python，先转成16进制，再转成整数
         ires = int(bres.encode('hex'), 16)
     else:
+        # 3.x的python ，按照小端xu
         ires = int.from_bytes(bres, 'little')
 
     return ires
 
 
 def _random_choice(seq):
+    # 从序列中随机挑选一个元素
     return seq[_random_int(1) % len(seq)]
 
 
 def get_proxies():
+    """
+    获得代理，仅支持http代理
+    """
     proxies = getproxies()
     filtered_proxies = {}
     for key, value in proxies.items():
@@ -188,6 +212,7 @@ def _get_result(url):
         raise error
 
 
+# 从缓存中获得结果(对于已经访问过的网页)
 def _get_from_cache(cache_key):
     # As of cachelib 0.3.0, it internally logging a warning on cache miss
     current_log_level = logging.getLogger().getEffectiveLevel()
@@ -200,6 +225,9 @@ def _get_from_cache(cache_key):
 
 
 def _add_links_to_text(element):
+    """
+    获取链接中的文本信息
+    """
     hyperlinks = element.find('a')
 
     for hyperlink in hyperlinks:
@@ -214,6 +242,9 @@ def _add_links_to_text(element):
 
 
 def get_text(element):
+    """
+    返回pyquery element对象的内层文本信息
+    """
     ''' return inner text in pyquery element '''
     _add_links_to_text(element)
     try:
@@ -223,6 +254,9 @@ def get_text(element):
 
 
 def _extract_links_from_bing(html):
+    """
+    从biying中 解压出来链接
+    """
     html.remove_namespaces()
     return [a.attrib['href'] for a in html('.b_algo')('h2')('a')]
 
